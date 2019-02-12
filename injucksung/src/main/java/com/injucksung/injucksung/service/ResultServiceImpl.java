@@ -32,14 +32,44 @@ public class ResultServiceImpl implements ResultService {
             Integer chosenNum = submittedQuizInfoDto.getSelectedChoices().get(question.getId());
             results.add(
                     Result.builder()
-                    .isCorrect(question.getCorrect() == chosenNum)
-                    .checkedChoice(chosenNum)
-                    .question(question)
-                    .quizRecord(quizRecord)
-                    .build());
+                            .isCorrect(question.getCorrect() == chosenNum)
+                            .checkedChoice(chosenNum)
+                            .question(question)
+                            .quizRecord(quizRecord)
+                            .build());
         }
 
         return resultRepository.saveAll(results);
+    }
+
+    @Override
+    public List<Result> addResult(Long[] bookContentIds, QuizRecord quizRecord) {
+        List<Result> results = new ArrayList<>();
+        List<Question> questions = questionRepository.findQuestionByBookContentId(bookContentIds);
+
+        for (int i = 0; i < questions.size(); i++) {
+            results.add(
+                    Result.builder()
+                            .isCorrect(false)
+                            .checkedChoice(0)
+                            .sequence(i)
+                            .question(questions.get(i))
+                            .quizRecord(quizRecord)
+                            .build());
+        }
+        return resultRepository.saveAll(results);
+    }
+
+    @Override
+    public QuizRecord checkQuestion(Long resultId, int checkedChoice) {
+        Result resultById = resultRepository.findResultById(resultId);
+        resultById.setCheckedChoice(checkedChoice);
+        if (resultById.getQuestion().getCorrect() == checkedChoice) {
+            resultById.setIsCorrect(true);
+        }
+
+        Result save = resultRepository.save(resultById);
+        return save.getQuizRecord();
     }
 
     @Override

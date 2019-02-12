@@ -9,13 +9,12 @@ import com.injucksung.injucksung.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -25,17 +24,19 @@ public class QuizRecordServiceImpl implements QuizRecordService {
     private final UserService userService;
 
     @Transactional(readOnly = true)
+    @Override
     public Page<QuizRecord> getQuizRecordList(Long userId, int start) {
         PageRequest pageRequest = PageRequest.of(start, PageSize.QUIZ_RECORD.getLimit());
         return quizRecordRepository.findQuizRecordByUserId(userId, pageRequest);
     }
 
     @Transactional
-    public QuizRecord addQuizRecordService(SubmittedQuizInfoDto submittedQuizInfoDto, CustomUserDetails userDetails) {
+    @Override
+    public QuizRecord addQuizRecord(SubmittedQuizInfoDto submittedQuizInfoDto, CustomUserDetails userDetails) {
         QuizRecord quizRecord = QuizRecord.builder()
                 .title(createQuizRecordTitle(submittedQuizInfoDto))
                 .user(userService.getUser(userDetails.getEmail()))
-//                .time() // TODO : 풀이 시간
+                .isDone(true)
                 .build();
 
         return quizRecordRepository.save(quizRecord);
@@ -60,19 +61,58 @@ public class QuizRecordServiceImpl implements QuizRecordService {
         //위에 적힌 제목이외에 여러 영역을 응시한 경우
         int bookContentCount = submittedQuizInfoDto.getBookContentCount();
         if (bookContentCount > 1) {
-            title.append(" 외 ").append(bookContentCount-1).append("건");
+            title.append(" 외 ").append(bookContentCount - 1).append("건");
         }
 
         return title.toString();
     }
 
-    // TODO: 2018-12-18 이게 과연 필요할까?
-    public int modifyQuizRecordService(QuizRecord quizRecord) {
-        return 0;
+    // TODO : 현재 addQuizRecord 메소드의 코드 중복 발생 리팩토링 필요
+    @Transactional
+    @Override
+    public QuizRecord addQuizRecord(Long[] bookContentIds, CustomUserDetails userDetails) {
+        QuizRecord quizRecord = QuizRecord.builder()
+                .title(createQuizRecordTitle(bookContentIds))
+                .user(userService.getUser(userDetails.getEmail()))
+                .isDone(false)
+                .build();
+        return quizRecordRepository.save(quizRecord);
     }
 
-    // TODO: 2018-12-18 이게 과연 필요할까? 
-    public void deleteQuizRecordService(Long id) {
+    //QuizRecord(시험 목록)의 제목 만들기
+    private String createQuizRecordTitle(Long[] bookContentIds) {
+        StringBuilder title = new StringBuilder();
 
+        if (bookContentIds.length > 0) {
+            //책 이름과 책목차 한가지를 생성한다.
+            List<Question> questionByBookContentId = questionService.getQuestionByBookContentId(bookContentIds[0]);
+
+            //제일 앞에 책 이름
+            title.append(questionByBookContentId.get(0).getBookContent().getBook().getName())
+                    .append(" : ")
+                    //책 이름 뒤에 대표로 들어갈 책 목차 이름
+                    .append(questionByBookContentId.get(0).getBookContent().getName())
+                    .append(" 영역");
+
+        }
+
+        //위에 적힌 제목이외에 여러 영역을 응시한 경우
+        if (bookContentIds.length > 1) {
+            title.append(" 외 ").append(bookContentIds.length - 1).append("건");
+        }
+
+        return title.toString();
+    }
+
+    @Transactional
+    @Override
+    public QuizRecord modifyQuizRecordService(QuizRecord quizRecord) {
+        Optional<QuizRecord> byId = quizRecordRepository.findById(quizRecord.getId());
+        QuizRecord quizRecordById = null;
+        if (byId.isPresent()) {
+            quizRecordById = byId.get();
+            quizRecordById.setDone(true);
+        }
+        return quizRecordRepository.save(quizRecordById);
     }
 }
